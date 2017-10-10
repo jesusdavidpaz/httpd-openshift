@@ -7,7 +7,7 @@ MAINTAINER suport.gencat@gencat.cat
 RUN groupadd -r httpd && useradd -r -g httpd httpd
 
 ENV HTTPD_PREFIX /usr/local/apache2
-ENV PATH $PATH:$HTTPD_PREFIX/bin
+ENV PATH $HTTPD_PREFIX/bin:$PATH
 RUN mkdir -p "$HTTPD_PREFIX" \
 	&& chown httpd:httpd "$HTTPD_PREFIX"
 WORKDIR $HTTPD_PREFIX
@@ -23,31 +23,32 @@ RUN apt-get update \
 		libaprutil1-dev \
 		libpcre++0 \
 		libssl1.0.0 \
-		sudo \
 	&& rm -r /var/lib/apt/lists/*
 
-ENV HTTPD_VERSION 2.2.34
+ENV HTTPD_VERSION 2.4.28
+ENV HTTPD_SHA1 0b37522b808dcee72e1d56d656b0def530b820a2
 ENV HTTPD_BZ2_URL https://www.apache.org/dist/httpd/httpd-$HTTPD_VERSION.tar.bz2
 
-RUN buildDeps=' \
-		ca-certificates \
-		curl \
+RUN set -x \
+	&& buildDeps=' \
 		bzip2 \
+		ca-certificates \
 		gcc \
 		libpcre++-dev \
 		libssl-dev \
 		make \
+		wget \
 	' \
-	set -x \
 	&& apt-get update \
 	&& apt-get install -y --no-install-recommends $buildDeps \
 	&& rm -r /var/lib/apt/lists/* \
 	\
-	&& curl -fSL "$HTTPD_BZ2_URL" -o httpd.tar.bz2 \
-	&& curl -fSL "$HTTPD_BZ2_URL.asc" -o httpd.tar.bz2.asc \
+	&& wget -O httpd.tar.bz2 "$HTTPD_BZ2_URL" \
+	&& echo "$HTTPD_SHA1 *httpd.tar.bz2" | sha1sum -c - \
 # see https://httpd.apache.org/download.cgi#verify
+	&& wget -O httpd.tar.bz2.asc "$HTTPD_BZ2_URL.asc" \
 	&& export GNUPGHOME="$(mktemp -d)" \
-	&& gpg --keyserver ha.pool.sks-keyservers.net --recv-keys B1B96F45DFBDCCF974019235193F180AB55D9977 \
+	&& gpg --keyserver ha.pool.sks-keyservers.net --recv-keys A93D62ECC3C8EA12DB220EC934EA76E6791485A8 \
 	&& gpg --batch --verify httpd.tar.bz2.asc httpd.tar.bz2 \
 	&& rm -r "$GNUPGHOME" httpd.tar.bz2.asc \
 	\
@@ -58,9 +59,7 @@ RUN buildDeps=' \
 	\
 	&& ./configure \
 		--prefix="$HTTPD_PREFIX" \
-# https://httpd.apache.org/docs/2.2/programs/configure.html
-# Caveat: --enable-mods-shared=all does not actually build all modules. To build all modules then, one might use:
-		--enable-mods-shared='all ssl ldap cache proxy authn_alias mem_cache file_cache authnz_ldap charset_lite dav_lock disk_cache' \
+		--enable-mods-shared=reallyall \
 	&& make -j"$(nproc)" \
 	&& make install \
 	\
